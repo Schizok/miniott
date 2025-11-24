@@ -2,7 +2,7 @@
 
 A modern, adaptive bitrate (ABR) video streaming platform built with React, Vite, Tailwind CSS, and Python.
 
-![Sintel](mini-ott-web/public/posters/sintel.jpg)
+![Mini OTT Dashboard](assets/screenshots/dashboard.png)
 
 ## Features
 
