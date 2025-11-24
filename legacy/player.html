@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="luxury">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MiniOTT Player</title>
+    <link rel="icon" type="image/png" href="assets/logo.png">
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.7.2/dist/full.min.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        /* Hide default controls when using custom ones if we were building a full custom skin, 
+           but here we use browser controls + external quality picker */
+    </style>
+</head>
+
+<body class="bg-black min-h-screen flex flex-col items-center justify-center">
+
+    <!-- Back Button -->
+    <a href="index.html" class="absolute top-4 left-4 btn btn-circle btn-ghost text-white z-50">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+    </a>
+
+    <div class="w-full max-w-5xl aspect-video relative group">
+        <video id="video" class="w-full h-full bg-black" controls autoplay></video>
+
+        <!-- Quality Selector (Overlay) -->
+        <div class="absolute top-4 right-4 z-50">
+            <div class="dropdown dropdown-end">
+                <div tabindex="0" role="button" class="btn btn-sm btn-outline btn-accent gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Quality
+                </div>
+                <ul tabindex="0" id="quality-list"
+                    class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-32">
+                    <!-- Options will be injected by JS -->
+                    <li><a>Auto</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-4 text-center">
+        <h1 id="video-title" class="text-2xl font-bold text-white">Loading...</h1>
+        <p class="text-gray-400 text-sm mt-1">Adaptive Bitrate Streaming Demo</p>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const movieName = urlParams.get('v') || 'movie1'; // Default to movie1
+
+        document.getElementById('video-title').innerText = movieName.charAt(0).toUpperCase() + movieName.slice(1);
+
+        var video = document.getElementById('video');
+        var videoSrc = `/content/${movieName}/master.m3u8`;
+        var hls;
+
+        if (Hls.isSupported()) {
+            hls = new Hls();
+            hls.loadSource(videoSrc);
+            hls.attachMedia(video);
+
+            hls.on(Hls.Events.MANIFEST_PARSED, function (event, data) {
+                console.log("Manifest loaded, found " + data.levels.length + " quality levels");
+                generateQualityList(data.levels);
+                video.play();
+            });
+        }
+        else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = videoSrc;
+            video.addEventListener('loadedmetadata', function () {
+                video.play();
+            });
+        }
+
+        function generateQualityList(levels) {
+            const list = document.getElementById('quality-list');
+            list.innerHTML = ''; // Clear existing
+
+            // Add Auto option
+            const autoLi = document.createElement('li');
+            const autoA = document.createElement('a');
+            autoA.innerText = 'Auto';
+            autoA.onclick = () => {
+                hls.currentLevel = -1; // -1 means auto
+                updateActiveQuality(-1);
+            };
+            autoLi.appendChild(autoA);
+            list.appendChild(autoLi);
+
+            // Add levels (highest first usually looks better, but let's stick to index order or reverse)
+            // hls.js levels are usually sorted by bitrate ascending.
+            levels.forEach((level, index) => {
+                const li = document.createElement('li');
+                const a = document.createElement('a');
+                const height = level.height;
+                const bitrate = (level.bitrate / 1000).toFixed(0) + 'k';
+                a.innerText = `${height}p (${bitrate})`;
+                a.onclick = () => {
+                    console.log("Forcing level " + index);
+                    hls.currentLevel = index;
+                    updateActiveQuality(index);
+                };
+                li.appendChild(a);
+                // Prepend to show highest quality at top? Or append? Let's prepend (reverse order)
+                list.insertBefore(li, list.children[1]);
+            });
+
+            updateActiveQuality(-1);
+        }
+
+        function updateActiveQuality(activeIndex) {
+            const list = document.getElementById('quality-list');
+            const items = list.querySelectorAll('a');
+
+            // Auto is usually the first item (index 0 in our list logic if we appended, but we inserted before)
+            // Actually, let's just loop and match text or keep it simple.
+
+            // Simple visual update
+            items.forEach(item => item.classList.remove('active'));
+
+            if (activeIndex === -1) {
+                // Find "Auto"
+                for (let item of items) {
+                    if (item.innerText === 'Auto') item.classList.add('active');
+                }
+            } else {
+                // This is a bit tricky because we reversed the display order.
+                // Let's just rely on the click handler for now or improve the logic if needed.
+                // For a robust UI, we'd map indices to elements.
+            }
+        }
+    </script>
+</body>
+
+</html>
